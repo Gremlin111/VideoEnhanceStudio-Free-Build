@@ -1,0 +1,8 @@
+# Xcode, XcodeGen, and temporary files
+*.xcodeproj/
+DerivedData/
+build/
+*.ipa
+.DS_Store
+*.xcuserstate
+*.xcuserdata/

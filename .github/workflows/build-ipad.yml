@@ -1,0 +1,57 @@
+name: Build free unsigned iPad IPA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  make-ipa:
+    name: Compile on free hosted Mac
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - name: Download app source
+        uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+      - name: Build iPhone and iPad application without signing
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project VideoEnhanceStudio.xcodeproj \
+            -scheme VideoEnhanceStudio \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/ves-derived" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
+            build 2>&1 | tee "$RUNNER_TEMP/ves-build.log"
+      - name: Package unsigned IPA for free Windows sideloading
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/ves-derived/Build/Products/Release-iphoneos/VideoEnhanceStudio.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          ditto "$APP" "$RUNNER_TEMP/ipa/Payload/VideoEnhanceStudio.app"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/VideoEnhanceStudio-unsigned.ipa" Payload)
+          unzip -t "$GITHUB_WORKSPACE/VideoEnhanceStudio-unsigned.ipa" | tail -1
+      - name: Provide unsigned IPA for download
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoEnhanceStudio-unsigned-IPA
+          path: VideoEnhanceStudio-unsigned.ipa
+          retention-days: 7
+      - name: Provide build logs if compilation fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoEnhanceStudio-build-log
+          path: ${{ runner.temp }}/ves-build.log
+          if-no-files-found: ignore
+          retention-days: 7
